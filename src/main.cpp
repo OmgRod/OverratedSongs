@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/CustomSongLayer.hpp>
+#include <Geode/utils/web.hpp>
 #include <matjson.hpp>
 #include <fstream>
 
@@ -9,6 +10,9 @@ struct Song {
     int songID;
     uint64_t weight;
 };
+
+// Global task holder to prevent request cancellation
+static async::TaskHolder<web::WebResponse> s_refreshTask;
 
 std::optional<Song> weightedChoice(const std::vector<Song>& songs) {
     uint64_t totalWeight = 0;
@@ -76,18 +80,31 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
 	bool init(CustomSongDelegate* delegate) {
 		if (!CustomSongLayer::init(delegate)) return false;
 
-		auto spr = CircleButtonSprite::create(
+		auto rngSpr = CircleButtonSprite::create(
 			CCSprite::create("overrated.png"_spr),
 			CircleBaseColor::DarkAqua,
 			CircleBaseSize::Big
 		);
-		auto button = CCMenuItemSpriteExtra::create(
-			spr,
+		auto rngButton = CCMenuItemSpriteExtra::create(
+			rngSpr,
 			this,
 			menu_selector(MyCustomSongLayer::onOverratedSongs)
 		);
-		button->setPosition({ 14.0f, -190.0f });
-		m_buttonMenu->addChild(button);
+		rngButton->setPosition({ 14.0f, -190.0f });
+		m_buttonMenu->addChild(rngButton);
+
+		auto refreshSpr = CircleButtonSprite::create(
+			CCSprite::create("refresh.png"_spr),
+			CircleBaseColor::DarkAqua,
+			CircleBaseSize::Small
+		);
+		auto refreshButton = CCMenuItemSpriteExtra::create(
+			refreshSpr,
+			this,
+			menu_selector(MyCustomSongLayer::onRefreshSongs)
+		);
+		refreshButton->setPosition({ 14.0f, -140.0f });
+		m_buttonMenu->addChild(refreshButton);
 
 		return true;
 	}
@@ -100,13 +117,13 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
 			return;
 		}
 
-        int weightPercentage = Mod::get()->getSettingValue<int>("weight-percentage");
+        int64_t weightPercentage = Mod::get()->getSettingValue<int64_t>("weight-percentage");
         for (auto& song : songs) {
             if (weightPercentage <= 0) {
                 song.weight = 1;
             } else {
                 double multiplier = static_cast<double>(weightPercentage) / 100.0;
-                song.weight = static_cast<int>(std::max(1.0, static_cast<double>(song.weight) * multiplier));
+                song.weight = static_cast<uint64_t>(std::max(1.0, static_cast<double>(song.weight) * multiplier));
             }
         }
 
@@ -116,10 +133,46 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
 
 		log::info("Selected Song ID: {}", id);
 
-		m_songDelegate->songIDChanged(id);
-		log::debug("Active Song ID: {}", m_songDelegate->getActiveSongID());
 		m_songWidget->updateSongObject(SongInfoObject::create(id));
 		m_songWidget->updateSongInfo();
 		m_songWidget->getSongInfoIfUnloaded();
+	}
+
+	void onRefreshSongs(CCObject* sender) {
+        auto req = web::WebRequest();
+        
+        s_refreshTask.spawn(
+            "Refreshing Songs",
+            req.get("https://raw.githubusercontent.com/OmgRod/OverratedSongs/refs/heads/master/res/files/songs.json"),
+            [this](web::WebResponse res) {
+                if (!res.ok()) {
+                    Notification::create("Failed to fetch updated songs list.", NotificationIcon::Error)->show();
+                    return;
+                }
+
+                auto newJsonRes = res.json();
+                if (!newJsonRes) {
+                    Notification::create("Received invalid data from server. Please try again later.", NotificationIcon::Error)->show();
+                    return;
+                }
+
+                auto newJson = newJsonRes.unwrap();
+                auto currentPath = Mod::get()->getResourcesDir() / "songs.json";
+                
+                std::ifstream file(currentPath);
+                auto currentJsonRes = matjson::parse(file);
+                
+                if (currentJsonRes && currentJsonRes.unwrap() == newJson) {
+                    Notification::create("Songs list is already up to date.", NotificationIcon::Info)->show();
+                    return;
+                }
+
+                std::ofstream outFile(currentPath);
+                outFile << newJson.dump(4);
+                outFile.close();
+
+                Notification::create("Songs list updated successfully!", NotificationIcon::Success)->show();
+            }
+        );
 	}
 };
