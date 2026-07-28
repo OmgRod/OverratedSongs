@@ -105,7 +105,7 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
 	}
 
 	void onOverratedSongs(CCObject* sender) {
-		auto songs = loadSongsFromJSON((Mod::get()->getResourcesDir() / "songs.json").string());
+		auto songs = loadSongsFromJSON(geode::utils::string::pathToString(Mod::get()->getResourcesDir() / "songs.json"));
 
 		if (songs.empty()) {
 			log::error("No valid songs found!");
