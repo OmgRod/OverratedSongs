@@ -5,13 +5,11 @@
 #include <fstream>
 
 using namespace geode::prelude;
-
 struct Song {
     int songID;
     uint64_t weight;
 };
 
-// Global task holder to prevent request cancellation
 static async::TaskHolder<web::WebResponse> s_refreshTask;
 
 std::optional<Song> weightedChoice(const std::vector<Song>& songs) {
