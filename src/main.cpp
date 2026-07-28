@@ -1,8 +1,8 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/CustomSongLayer.hpp>
 #include <Geode/utils/web.hpp>
+#include <Geode/utils/file.hpp>
 #include <matjson.hpp>
-#include <fstream>
 
 using namespace geode::prelude;
 struct Song {
@@ -45,10 +45,7 @@ std::optional<Song> weightedChoice(const std::vector<Song>& songs) {
 std::vector<Song> loadSongsFromJSON(const std::string& path) {
     std::vector<Song> songs;
 
-    std::ifstream file(path);
-    if (!file.is_open()) return songs;
-
-    auto result = matjson::parse(file);
+    auto result = file::readJson(path);
     if (!result) {
         log::error("Failed to parse songs.json: {}", result.unwrapErr());
         return songs;
@@ -157,17 +154,18 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
                 auto newJson = newJsonRes.unwrap();
                 auto currentPath = Mod::get()->getResourcesDir() / "songs.json";
                 
-                std::ifstream file(currentPath);
-                auto currentJsonRes = matjson::parse(file);
+                auto currentJsonRes = file::readJson(currentPath);
                 
                 if (currentJsonRes && currentJsonRes.unwrap() == newJson) {
                     Notification::create("Songs list is already up to date.", NotificationIcon::Info)->show();
                     return;
                 }
 
-                std::ofstream outFile(currentPath);
-                outFile << newJson.dump(4);
-                outFile.close();
+                auto writeRes = file::writeString(currentPath, newJson.dump(4));
+                if (!writeRes) {
+                    Notification::create("Failed to save updated songs list.", NotificationIcon::Error)->show();
+                    return;
+                }
 
                 Notification::create("Songs list updated successfully!", NotificationIcon::Success)->show();
             }
