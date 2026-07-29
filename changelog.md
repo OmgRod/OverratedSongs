@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.3
+
+- Stop constantly reading the file when randomising
+
 ## v1.0.2
 
 - Switch to `pathToString`

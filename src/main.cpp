@@ -11,6 +11,7 @@ struct Song {
 };
 
 static async::TaskHolder<web::WebResponse> s_refreshTask;
+static std::vector<Song> s_songs;
 
 std::optional<Song> weightedChoice(const std::vector<Song>& songs) {
     uint64_t totalWeight = 0;
@@ -105,12 +106,20 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
 	}
 
 	void onOverratedSongs(CCObject* sender) {
-		auto songs = loadSongsFromJSON(geode::utils::string::pathToString(Mod::get()->getResourcesDir() / "songs.json"));
+    if (s_songs.empty()) {
+        s_songs = loadSongsFromJSON(
+            geode::utils::string::pathToString(
+                Mod::get()->getResourcesDir() / "songs.json"
+            )
+        );
+    }
 
-		if (songs.empty()) {
-			log::error("No valid songs found!");
-			return;
-		}
+    if (s_songs.empty()) {
+        log::error("No valid songs found!");
+            return;
+        }
+
+        auto songs = s_songs;
 
         int64_t weightPercentage = Mod::get()->getSettingValue<int64_t>("weight-percentage");
         for (auto& song : songs) {
@@ -118,20 +127,22 @@ class $modify(MyCustomSongLayer, CustomSongLayer) {
                 song.weight = 1;
             } else {
                 double multiplier = static_cast<double>(weightPercentage) / 100.0;
-                song.weight = static_cast<uint64_t>(std::max(1.0, static_cast<double>(song.weight) * multiplier));
+                song.weight = static_cast<uint64_t>(
+                    std::max(1.0, static_cast<double>(song.weight) * multiplier)
+                );
             }
         }
 
-		auto chosen = weightedChoice(songs);
+        auto chosen = weightedChoice(songs);
 
-		int id = chosen->songID;
+        int id = chosen->songID;
 
-		log::info("Selected Song ID: {}", id);
+        log::info("Selected Song ID: {}", id);
 
-		m_songWidget->updateSongObject(SongInfoObject::create(id));
-		m_songWidget->updateSongInfo();
-		m_songWidget->getSongInfoIfUnloaded();
-	}
+        m_songWidget->updateSongObject(SongInfoObject::create(id));
+        m_songWidget->updateSongInfo();
+        m_songWidget->getSongInfoIfUnloaded();
+    }
 
 	void onRefreshSongs(CCObject* sender) {
         auto req = web::WebRequest();

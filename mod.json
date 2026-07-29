@@ -8,7 +8,7 @@
 	},
 	"id": "omgrod.overrated-songs",
 	"name": "Overrated Song Shuffler",
-	"version": "v1.0.2",
+	"version": "v1.0.3",
 	"developer": "OmgRod",
 	"description": "This mod picks a random popular song from the GD servers.",
 	"resources": {
